@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>DaCapo.</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins&family=DM+Sans&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span id="user-info">Profil</span>
+    </div>
+    <nav>
+      <button id="profile-tab">Profil</button>
+      <button id="logout-btn">Déconnexion</button>
+    </nav>
+  </header>
+  <main>
+    <!-- Section Journal de bord -->
+    <section id="repertoire-section">
+      <h2>Journal de bord</h2>
+      <form id="repertoire-form">
+        <input type="text" id="piece_name" placeholder="Nom de la pièce" required>
+        <textarea id="notes" placeholder="Notes"></textarea>
+        <button type="submit">Enregistrer</button>
+      </form>
+      <div id="repertoire-list"></div>
+    </section>
+
+    <!-- Section Profil -->
+    <section id="profile-section" class="hidden">
+      <h2>Profil</h2>
+      <div id="profile-details">
+        <p id="profile-name"></p>
+        <p id="profile-email"></p>
+        <label for="instrument">Instrument :</label>
+        <select id="instrument">
+          <option value="">Choisir un instrument</option>
+          <option value="violon">Violon</option>
+          <option value="piano">Piano</option>
+          <option value="violoncelle">Violoncelle</option>
+          <option value="flûte">Flûte</option>
+          <!-- Ajoute d'autres instruments si besoin -->
+        </select>
+        <button id="save-profile">Enregistrer</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    const SUPABASE_URL = 'https://tewwxhxswtgkaracujlb.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRld3d4aHhzd3Rna2FyYWN1amxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAzMDQzNTcsImV4cCI6MjA1NTg4MDM1N30.14_yg4RQ4a-gNe4npDh8cB8p_eyGIcZ7Q3lC5e6xCiM';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Vérifier la session utilisateur
+    async function checkAuth() {
+      const session = supabase.auth.session();
+      if (!session) {
+        window.location.href = 'login.html';
+      } else {
+        loadUserData(session.user);
+      }
+    }
+
+    // Charger les infos utilisateur et le répertoire
+    async function loadUserData(user) {
+      document.getElementById('user-info').textContent = user.user_metadata.first_name || 'Profil';
+      document.getElementById('profile-name').textContent = user.user_metadata.first_name || '';
+      document.getElementById('profile-email').textContent = user.email;
+      loadRepertoire(user.id);
+    }
+
+    // Charger le journal de bord
+    async function loadRepertoire(userId) {
+      const { data, error } = await supabase
+        .from('repertoire')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error(error);
+      } else {
+        const list = document.getElementById('repertoire-list');
+        list.innerHTML = '';
+        data.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'repertoire-item';
+          div.innerHTML = `<h3>${item.piece_name}</h3><p>${item.notes}</p>`;
+          list.appendChild(div);
+        });
+      }
+    }
+
+    // Ajouter une pièce au répertoire
+    document.getElementById('repertoire-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const piece_name = document.getElementById('piece_name').value;
+      const notes = document.getElementById('notes').value;
+      const session = supabase.auth.session();
+      const { error } = await supabase
+        .from('repertoire')
+        .insert([{ piece_name, notes, user_id: session.user.id }]);
+      if (error) {
+        alert(error.message);
+      } else {
+        document.getElementById('piece_name').value = '';
+        document.getElementById('notes').value = '';
+        loadRepertoire(session.user.id);
+      }
+    });
+
+    // Affichage/masquage de la section profil
+    document.getElementById('profile-tab').addEventListener('click', () => {
+      document.getElementById('profile-section').classList.toggle('hidden');
+    });
+
+    // Sauvegarder le choix d’instrument dans la table profiles
+    document.getElementById('save-profile').addEventListener('click', async () => {
+      const instrument = document.getElementById('instrument').value;
+      const session = supabase.auth.session();
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: session.user.id, instrument });
+      if (error) {
+        alert(error.message);
+      } else {
+        alert('Profil mis à jour');
+      }
+    });
+
+    // Déconnexion
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+
+    checkAuth();
+  </script>
+</body>
+</html>
